@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Porto Verde — Open-World Crime Game</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0e14;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #fff; }
+  #game-canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  .panel { background: rgba(8, 12, 20, 0.62); border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 8px; backdrop-filter: blur(2px); }
+  #hud-top-right { position: absolute; top: 12px; right: 12px; padding: 8px 12px; text-align: right; }
+  #hud-cash { font-size: 26px; font-weight: 800; color: #7ee787; letter-spacing: 1px; }
+  #hud-stars { font-size: 22px; letter-spacing: 3px; }
+  #hud-clock { font-size: 13px; color: #cfe3ff; margin-top: 2px; }
+  #hud-district { font-size: 12px; color: #ffd23e; margin-top: 2px; }
+  #hud-top-left { position: absolute; top: 12px; left: 12px; padding: 10px 12px; }
+  #hud-lead { font-size: 15px; font-weight: 700; }
+  #hud-missions { font-size: 12px; color: #cfe3ff; margin-top: 3px; }
+  .bar { width: 180px; height: 10px; background: rgba(255,255,255,0.18); border-radius: 5px;
+    margin-top: 6px; overflow: hidden; }
+  .bar > div { height: 100%; }
+  #hud-health-fill { background: #ff5a5a; width: 100%; }
+  #hud-armor-fill { background: #5ab8ff; width: 50%; }
+  .bar-label { font-size: 10px; color: #ddd; margin-top: 2px; letter-spacing: 1px; }
+  #hud-bottom-left { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 12px; align-items: flex-end; }
+  #minimap { width: 220px; height: 220px; border-radius: 10px; border: 2px solid rgba(255,255,255,0.35);
+    background: #16324a; }
+  #hud-bottom-info { padding: 8px 12px; font-size: 13px; }
+  #hud-speed { font-size: 22px; font-weight: 800; color: #fff; }
+  #hud-weapon, #hud-radio { font-size: 12px; color: #cfe3ff; margin-top: 2px; }
+  #hud-objective { position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    padding: 9px 18px; font-size: 15px; font-weight: 600; color: #ffd23e; max-width: 640px; text-align: center; }
+  #hud-toast { position: absolute; bottom: 250px; left: 50%; transform: translateX(-50%);
+    padding: 10px 20px; font-size: 15px; font-weight: 600; opacity: 0; transition: opacity .3s;
+    max-width: 700px; text-align: center; }
+  #hud-toast.show { opacity: 1; }
+  #hud-toast.wanted { border-color: #ff4040; color: #ffb3b3; }
+  #hud-toast.mission { border-color: #ffd23e; color: #ffe9a0; }
+  #hud-toast.crime { border-color: #ff7a2e; color: #ffd0b0; }
+  #hud-toast.dead { border-color: #ff2020; color: #ff8080; background: rgba(60,0,0,0.7); }
+  #hud-toast.ability { border-color: #39d0ff; color: #b0ecff; }
+  #hud-toast.race { border-color: #ff7a2e; color: #ffd0b0; }
+  #hud-banner { position: absolute; top: 32%; left: 50%; transform: translateX(-50%);
+    text-align: center; opacity: 0; transition: opacity .4s; }
+  #hud-banner.show { opacity: 1; }
+  .banner-title { font-size: 54px; font-weight: 900; letter-spacing: 4px; color: #ffd23e;
+    text-shadow: 0 3px 0 #7a4a00, 0 6px 18px rgba(0,0,0,0.7); }
+  .banner-sub { font-size: 18px; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.8); margin-top: 6px; }
+  .screen { position: fixed; inset: 0; z-index: 10; display: none; align-items: center; justify-content: center;
+    flex-direction: column; text-align: center; background: linear-gradient(180deg, rgba(6,10,18,0.55), rgba(6,10,18,0.88)); }
+  .game-title { font-size: 84px; font-weight: 900; letter-spacing: 6px; color: #ffd23e;
+    text-shadow: 0 4px 0 #b3541e, 0 10px 30px rgba(0,0,0,0.8); }
+  .game-sub { font-size: 20px; color: #cfe3ff; margin-top: 8px; letter-spacing: 2px; }
+  .leads { display: flex; gap: 24px; margin: 26px 0 8px; }
+  .lead-card { width: 220px; padding: 16px; border-radius: 12px; background: rgba(255,255,255,0.08);
+    border: 2px solid rgba(255,255,255,0.2); }
+  .lead-card h3 { font-size: 20px; margin-bottom: 6px; }
+  .lead-card p { font-size: 13px; color: #cfe3ff; line-height: 1.5; }
+  .btn { pointer-events: auto; cursor: pointer; margin-top: 14px; padding: 13px 34px; font-size: 17px;
+    font-weight: 700; letter-spacing: 1px; color: #1a1200; background: #ffd23e; border: none;
+    border-radius: 8px; }
+  .btn:hover { background: #ffdf6b; }
+  .btn.ghost { background: transparent; color: #fff; border: 2px solid rgba(255,255,255,0.5); }
+  .controls { font-size: 13px; color: #9fb3cc; margin-top: 22px; line-height: 1.9; }
+  .controls b { color: #fff; }
+  #help-overlay { position: fixed; inset: 0; z-index: 9; display: none; background: rgba(5,8,14,0.85);
+    padding: 60px; font-size: 15px; line-height: 2; }
+  #help-overlay h2 { color: #ffd23e; margin-bottom: 12px; }
+  #dead-screen .game-title { color: #ff4040; text-shadow: 0 4px 0 #5a0000, 0 10px 30px rgba(0,0,0,0.8); }
+  #hud-stats { font-size: 15px; color: #cfe3ff; margin-top: 14px; line-height: 1.8; }
+</style>
+</head>
+<body>
+<canvas id="game-canvas"></canvas>
+
+<div id="hud">
+  <div id="hud-top-left" class="panel">
+    <div id="hud-lead">Dante Reyes · Dead Eye (Q)</div>
+    <div id="hud-missions">Missions 0/10 · Races 0 · Packages 0/20</div>
+    <div class="bar"><div id="hud-health-fill"></div></div>
+    <div class="bar-label">HEALTH</div>
+    <div class="bar"><div id="hud-armor-fill"></div></div>
+    <div class="bar-label">ARMOR</div>
+  </div>
+  <div id="hud-top-right" class="panel">
+    <div id="hud-cash">$500</div>
+    <div id="hud-stars">☆☆☆☆☆</div>
+    <div id="hud-clock">10:12</div>
+    <div id="hud-district">Marina Bay</div>
+  </div>
+  <div id="hud-objective" class="panel">Press M for the next mission</div>
+  <div id="hud-bottom-left">
+    <canvas id="minimap" width="220" height="220"></canvas>
+    <div id="hud-bottom-info" class="panel">
+      <div id="hud-speed"></div>
+      <div id="hud-weapon">PISTOL · 120</div>
+      <div id="hud-radio">♪ RADIO SOL 98.5</div>
+    </div>
+  </div>
+  <div id="hud-toast" class="panel toast"></div>
+  <div id="hud-banner"></div>
+</div>
+
+<div id="title-screen" class="screen" style="display:flex">
+  <div class="game-title">PORTO VERDE</div>
+  <div class="game-sub">AN OPEN-WORLD CRIME GAME · ISLA VERDE</div>
+  <div class="leads">
+    <div class="lead-card"><h3 style="color:#5ab8e8">DANTE REYES</h3>
+      <p>Ex-wheelman turned fixer. <b>Dead Eye</b> slows time when the shooting starts. Best with a gun in hand.</p></div>
+    <div class="lead-card"><h3 style="color:#ff7ab0">LENA VEGA</h3>
+      <p>Street-race queen of the beachfront. <b>Nitro</b> turns any car into a rocket. Best behind the wheel.</p></div>
+  </div>
+  <button class="btn" id="title-start">▶ START NEW GAME</button>
+  <button class="btn ghost" id="title-continue" style="display:none">CONTINUE — LOAD SAVE</button>
+  <div class="controls">
+    <b>WASD</b> move / drive &nbsp;·&nbsp; <b>SHIFT</b> run &nbsp;·&nbsp; <b>MOUSE</b> aim, <b>CLICK</b> shoot &nbsp;·&nbsp; <b>E</b> enter / steal car &nbsp;·&nbsp; <b>F</b> punch<br>
+    <b>SPACE</b> handbrake &nbsp;·&nbsp; <b>Q</b> crew ability &nbsp;·&nbsp; <b>C</b> switch lead &nbsp;·&nbsp; <b>1/2/3</b> weapons &nbsp;·&nbsp; <b>M</b> mission &nbsp;·&nbsp; <b>T</b> taxi &nbsp;·&nbsp; <b>R</b> street race<br>
+    <b>N</b> radio station &nbsp;·&nbsp; <b>V</b> camera &nbsp;·&nbsp; <b>P / ESC</b> pause &nbsp;·&nbsp; <b>H</b> help &nbsp;·&nbsp; Right-drag to look around
+  </div>
+</div>
+
+<div id="pause-screen" class="screen">
+  <div class="game-title" style="font-size:56px">PAUSED</div>
+  <div class="game-sub">PORTO VERDE · progress autosaves every 20 seconds</div>
+  <button class="btn" id="pause-resume">RESUME</button>
+  <button class="btn ghost" id="pause-save">SAVE NOW</button>
+  <button class="btn ghost" id="pause-quit">SAVE &amp; QUIT TO TITLE</button>
+</div>
+
+<div id="dead-screen" class="screen">
+  <div class="game-title">WASTED</div>
+  <div id="hud-stats"></div>
+  <button class="btn" id="dead-respawn">RESPAWN AT THE SAFEHOUSE</button>
+</div>
+
+<div id="help-overlay">
+  <h2>PORTO VERDE — HOW TO PLAY</h2>
+  <b>Story:</b> 10 missions (M) across six districts — the docks, the casino, the stadium, the tower. Finish them all to become King of Porto Verde. Total purse: $12,400.<br>
+  <b>On foot:</b> WASD moves, SHIFT runs, mouse aims, click shoots, F punches, 1/2/3 swap pistol / SMG / rifle.<br>
+  <b>Driving:</b> E steals the nearest car (the law notices), W/S accelerate and brake, A/D steer, SPACE handbrakes, Q fires your lead's ability.<br>
+  <b>Wanted:</b> 1–5 stars. Cruisers chase and PIT you, roadblocks appear at 3 stars, the helicopter hunts you at 4+. Break line of sight to cool off, or repaint at the Pay 'n Spray garage in the Docks ($150).<br>
+  <b>Side work:</b> street races (R), taxi fares (T), 20 hidden packages ($250 each), district standing grows as you work a district.<br>
+  <b>Leads:</b> C switches between Dante (Dead Eye slow-mo) and Lena (Nitro). Your save keeps cash, missions and standing.<br>
+  Press H to close.
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
